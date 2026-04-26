@@ -1,3 +1,5 @@
+const TranslationError = require('./TranslationError');
+
 class LoopManager {
     validateEnoughForAndWhileClosures(code) {
         const lines = code.split('\n');

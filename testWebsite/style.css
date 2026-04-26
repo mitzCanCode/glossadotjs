@@ -1,0 +1,48 @@
+body {
+    background: #111;
+    color: #0f0;
+    font-family: monospace;
+    margin: 0;
+    padding: 20px;
+}
+
+#terminal {
+    height: 300px;
+    overflow-y: auto;
+    border: 1px solid #0f0;
+    background: #000;
+    padding: 10px;
+}
+
+.line {
+    white-space: pre-wrap;
+}
+
+.input-line {
+    display: flex;
+    gap: 5px;
+}
+
+#cmd {
+    outline: none;
+    min-width: 10px;
+    caret-color: #0f0;
+    display: inline-block;
+    white-space: pre;
+}
+
+#cmdInput {
+    flex: 1;
+    background: black;
+    color: #0f0;
+    border: 1px solid #0f0;
+    padding: 5px;
+    font-family: monospace;
+}
+
+button {
+    background: #0f0;
+    border: none;
+    padding: 5px 10px;
+    cursor: pointer;
+}

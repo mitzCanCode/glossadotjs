@@ -1,3 +1,5 @@
+const TranslationError = require('./TranslationError');
+
 class ConditionManager {
     validateIfStatements(code) {
         const lines = code.split('\n');
