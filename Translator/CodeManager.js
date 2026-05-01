@@ -62,6 +62,7 @@ function createFixArray(size, data_type) {
                     });
                 }
             }
+
             return obj[prop];
         },
 
@@ -474,13 +475,11 @@ class CodeManager {
                 if (v.isArray) {
                     arrayDecls.push(`let ${v.name} = createFixArray(${v.arraySize}, '${v.type}')`);
                 } else {
-                    regularVars.push(v.name);
+                    regularVars.push(`${v.name} = undefined`);
                 }
             }
             
-            if (regularVars.length > 0) {
-                decl.push(`let ${regularVars.join(', ')}`);
-            }
+            decl.push(...regularVars);
             
             decl.push(...arrayDecls);
         }
@@ -492,6 +491,28 @@ class CodeManager {
 
         return body.join('\n');
     }
+
+    wrapVariablesWithScope(code) {
+        const vars = this.variables.filter(v => !v.isArray).map(v => v.name);
+
+
+        // sort by length (prevents partial replacement issues like "a" inside "ab")
+        vars.sort((a, b) => b.length - a.length);
+
+        const wordBoundary = '(?<![\\p{L}\\p{N}_])';
+        const wordBoundaryEnd = '(?![\\p{L}\\p{N}_])';
+
+        for (const name of vars) {
+            const regex = new RegExp(`${wordBoundary}${name}${wordBoundaryEnd}`, 'gu');
+
+            code = code.replace(regex, (match, offset, full) => {
+                return `scope.${name}`;
+            });
+        }
+
+        return code;
+    }
+
 
     addDeclarationString(code) {
         return this.declarationsString + "\n" + code;
@@ -605,7 +626,7 @@ class CodeManager {
         code = this.managePrint(code);
         code = this.manageInputStatements(code);
         code = this.manageVariableDeclarations(code);
-
+        code = this.wrapVariablesWithScope(code);
         return code;
     }
 

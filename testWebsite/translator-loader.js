@@ -64,10 +64,12 @@ window.translateCodeLoading = (async function() {
 
   const codeManagerPackage = moduleCache['CodeManager.js'];
 
-    window.runtimeHelpers = {
-        safeAssignment: codeManagerPackage.safeAssignment,
-        createFixArray: codeManagerPackage.createFixArray
-    };
+  window.runtimeHelpers = {
+    safeAssignment: codeManagerPackage.safeAssignment,
+    createFixArray: codeManagerPackage.createFixArray,
+    TranslationError: moduleCache['TranslationError.js']
+  };
+
   if (!codeManagerPackage || !codeManagerPackage.CodeManager) {
     throw new Error('Loaded translator package is missing CodeManager export.');
   }

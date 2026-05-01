@@ -177,14 +177,36 @@ runCodeBtn.addEventListener("click", async () => {
 
 async function runCode(codeString) {
   const AsyncFunction = Object.getPrototypeOf(async function(){}).constructor;
+
+  const scope = new Proxy({}, {
+    get(obj, prop) {
+      if ( typeof obj[prop] === 'undefined') {
+        throw new TranslationError({
+          devMessage: `Variable '${prop}' used before assignment`,
+          userMessage: `Η μεταβλητή '${prop}' δεν έχει αρχικοποιηθεί.`
+        });
+      }
+      return obj[prop];
+    },
+    
+    set(obj, prop, value) {
+      obj[prop] = value;
+      return true;
+    }
+  });
+
   const api = {
     print,
     getInput,
+    scope,
+    TranslationError: window.runtimeHelpers?.TranslationError,
     ...(window.runtimeHelpers || {})
   };
 
   const fn = new AsyncFunction("api", `
     Object.assign(globalThis, api);
+    const scope = globalThis.scope;
+
     ${codeString}
   `);
 
