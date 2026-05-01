@@ -13,6 +13,75 @@ class Variable{
     }
 }
 
+const validators = {
+    int: (v) => Number.isInteger(v),
+
+    float: (v) =>
+        typeof v === 'number' &&
+        Number.isFinite(v) &&
+        !Number.isInteger(v),
+
+    string: (v) => typeof v === 'string',
+
+    boolean: (v) => typeof v === 'boolean',
+};
+
+function safeAssignment(type, value) {
+    const validate = validators[type];
+
+    if (!validate) {
+        throw new TranslationError({
+            devMessage: `Unknown type for validation: ${type}`,
+            userMessage: `Εσωτερικό σφάλμα: άγνωστος τύπος δεδομένων '${type}' για έλεγχο.`,
+        });
+    }
+
+    if (!validate(value)) {
+        throw new TranslationError({
+            devMessage: `Type mismatch: expected ${type} but got ${typeof value}`,
+            userMessage: `Λάθος τύπος δεδομένων. Αναμενόταν ${type}.`,
+        });
+    }
+
+    return value;
+}
+
+function createFixArray(size, data_type) {
+    const target = new Array(size);
+    return new Proxy(target, {
+        get(obj, prop) {
+            if (prop === 'length') return size;
+            
+            const index = Number(prop);
+            
+            if (!Number.isNaN(index)) {
+                if (index < 0 || index >= size) {
+                    throw new TranslationError({
+                        devMessage: `Attempted to access index ${index} which is out of bounds for array of size ${size}`,
+                        userMessage: `Προσπάθεια πρόσβασης σε μη έγκυρο δείκτη πίνακα: ${index}. Ο πίνακας έχει μέγεθος ${size}.`,
+                    });
+                }
+            }
+            return obj[prop];
+        },
+
+        set(obj, prop, value) {
+            const index = Number(prop);
+            if (!Number.isNaN(index)) {
+                if (index < 0 || index >= size) {
+                    throw new TranslationError({
+                        devMessage: `Attempted to set index ${index} which is out of bounds for array of size ${size}`,
+                        userMessage: `Προσπάθεια ορισμού τιμής σε μη έγκυρο δείκτη πίνακα: ${index}. Ο πίνακας έχει μέγεθος ${size}.`,
+                    });
+                }
+            }
+
+            obj[prop] = value;
+            return true;
+        }
+    });
+}
+
 class CodeManager {
     constructor() {
         this.conditionManager = new ConditionManager();
@@ -22,6 +91,11 @@ class CodeManager {
         this.programName = "";
         this.variables = [];
         this.constants = [];
+        this.reservedNames = ['α_μ', 'α_τ', 'ε', 'εφ', 'ημ', 'λογ', 'συν', 'τ_ρ'];
+    }
+
+    isReservedName(name) {
+        return this.reservedNames.includes(name.toLowerCase());
     }
 
     codeCleanUpInit(code) {
@@ -84,8 +158,8 @@ class CodeManager {
         let variables = [];
 
         const TYPE_MAP = {
-            'ακεραιεσ': 'number',
-            'πραγματικεσ': 'number',
+            'ακεραιεσ': 'int',
+            'πραγματικεσ': 'float',
             'χαρακτηρεσ': 'string',
             'λογικεσ': 'boolean',
         };
@@ -126,6 +200,13 @@ class CodeManager {
                     });
                 }
 
+                if (this.isReservedName(name)) {
+                    throw new TranslationError({
+                        devMessage: `Reserved name cannot be used as constant: ${name}`,
+                        userMessage: `Το όνομα '${name}' είναι δεσμευμένο και δεν μπορεί να χρησιμοποιηθεί ως όνομα σταθεράς.`,
+                    });
+                }
+
                 if (!value) {
                     throw new TranslationError({
                         devMessage: `Missing value for constant: ${name}`,
@@ -149,6 +230,18 @@ class CodeManager {
             }
 
             constants = parsedConstants;
+
+            const constantNames = new Set();
+            for (const c of constants) {
+                if (constantNames.has(c.name)) {
+                    throw new TranslationError({
+                        devMessage: `Duplicate constant declaration: ${c.name}`,
+                        userMessage: `Η σταθερά '${c.name}' έχει ήδη δηλωθεί.`,
+                    });
+                }
+                constantNames.add(c.name);
+            }
+
             this.constants = constants;
         }
 
@@ -198,6 +291,21 @@ class CodeManager {
                             });
                         }
 
+                        if (this.isReservedName(name)) {
+                            throw new TranslationError({
+                                devMessage: `Reserved name cannot be used as variable: ${name}`,
+                                userMessage: `Το όνομα '${name}' είναι δεσμευμένο και δεν μπορεί να χρησιμοποιηθεί ως όνομα μεταβλητής.`,
+                            });
+                        }
+
+                        // Check for arrays with empty brackets
+                        if (name.includes('[') && !name.match(/^[^\[\]]+\[\d+\]$/)) {
+                            throw new TranslationError({
+                                devMessage: `Invalid array declaration: ${name}. Arrays must specify a size like x[10]`,
+                                userMessage: `Μη έγκυρη δήλωση πίνακα: ${name}. Οι πίνακες πρέπει να έχουν ένα μέγεθος, π.χ. x[10]`,
+                            });
+                        }
+
                         const arrayMatch = name.match(arrayPattern);
                         if (arrayMatch) {
                             const baseName = arrayMatch[1].trim();
@@ -238,6 +346,21 @@ class CodeManager {
                             });
                         }
 
+                        if (this.isReservedName(name.match(/[^\[\]]+/)[0])) {
+                            throw new TranslationError({
+                                devMessage: `Reserved name cannot be used as variable: ${name}`,
+                                userMessage: `Το όνομα είναι δεσμευμένο και δεν μπορεί να χρησιμοποιηθεί ως όνομα μεταβλητής.`,
+                            });
+                        }
+
+                        // Check for arrays with empty brackets
+                        if (name.includes('[') && !name.match(/^[^\[\]]+\[\d+\]$/)) {
+                            throw new TranslationError({
+                                devMessage: `Invalid array declaration: ${name}. Arrays must specify a size like x[10]`,
+                                userMessage: `Μη έγκυρη δήλωση πίνακα: ${name}. Οι πίνακες πρέπει να έχουν ένα μέγεθος, π.χ. x[10]`,
+                            });
+                        }
+
                         let isArray = false;
                         let arraySize = null;
                         const arrayMatch = name.match(arrayPattern);
@@ -256,6 +379,14 @@ class CodeManager {
 
                         parsedVariables.push(new Variable(name, tsType, isArray, false, null, arraySize));
                     } else {
+                        // Check for arrays with empty brackets
+                        if (entry.includes('[') && !entry.match(/^[^\[\]]+\[\d+\]$/)) {
+                            throw new TranslationError({
+                                devMessage: `Invalid array declaration: ${entry}. Arrays must specify a size like x[10]`,
+                                userMessage: `Μη έγκυρη δήλωση πίνακα: ${entry}. Οι πίνακες πρέπει να έχουν ένα μέγεθος, π.χ. x[10]`,
+                            });
+                        }
+
                         const arrayMatch = entry.match(arrayPattern);
                         if (arrayMatch) {
                             const name = arrayMatch[1].trim();
@@ -266,6 +397,14 @@ class CodeManager {
                                     userMessage: `Μη έγκυρη δήλωση πίνακα: ${entry}`,
                                 });
                             }
+
+                            if (this.isReservedName(name)) {
+                                throw new TranslationError({
+                                    devMessage: `Reserved name cannot be used as variable: ${name}`,
+                                    userMessage: `Το όνομα '${name}' είναι δεσμευμένο και δεν μπορεί να χρησιμοποιηθεί ως όνομα μεταβλητής.`,
+                                });
+                            }
+
                             parsedVariables.push(new Variable(name, null, true, false, null, size));
                             continue;
                         }
@@ -277,12 +416,39 @@ class CodeManager {
                                 userMessage: `Μη έγκυρο όνομα μεταβλητής: ${name}`,
                             });
                         }
+
+                        if (this.isReservedName(name)) {
+                            throw new TranslationError({
+                                devMessage: `Reserved name cannot be used as variable: ${name}`,
+                                userMessage: `Το όνομα '${name}' είναι δεσμευμένο και δεν μπορεί να χρησιμοποιηθεί ως όνομα μεταβλητής.`,
+                            });
+                        }
+
                         parsedVariables.push(new Variable(name, null));
                     }
                 }
             }
 
             variables = parsedVariables;
+
+            const variableNames = new Set();
+            for (const v of variables) {
+                if (variableNames.has(v.name)) {
+                    throw new TranslationError({
+                        devMessage: `Duplicate variable declaration: ${v.name}`,
+                        userMessage: `Η μεταβλητή '${v.name}' έχει ήδη δηλωθεί.`,
+                    });
+                }
+                variableNames.add(v.name);
+
+                if (this.constants.some((c) => c.name === v.name)) {
+                    throw new TranslationError({
+                        devMessage: `Variable conflicts with constant name: ${v.name}`,
+                        userMessage: `Το όνομα '${v.name}' χρησιμοποιείται ήδη για σταθερά και δεν μπορεί να χρησιμοποιηθεί ξανά ως μεταβλητή.`,
+                    });
+                }
+            }
+
             this.variables = variables;
         }
 
@@ -303,10 +469,27 @@ class CodeManager {
 
         // variables → let
         if (variables.length > 0) {
-            const typedList = variables.map(v => {
-                return v.type ? `${v.name}: ${v.type}` : v.name;
-            });
-            decl.push(`let ${typedList.join(', ')}`);
+            const arrayDecls = [];
+            const regularVars = [];
+            
+            for (let v of variables) {
+                if (v.isArray) {
+                    arrayDecls.push(`let ${v.name} = createFixArray(${v.arraySize}, '${v.type}')`);
+                } else {
+                    if (v.type) {
+                        const tsType = (v.type === 'int' || v.type === 'float') ? 'number' : v.type;
+                        regularVars.push(`${v.name}: ${tsType}`);
+                    } else {
+                        regularVars.push(v.name);
+                    }
+                }
+            }
+            
+            if (regularVars.length > 0) {
+                decl.push(`let ${regularVars.join(', ')}`);
+            }
+            
+            decl.push(...arrayDecls);
         }
 
         this.declarationsString = decl.join('\n');
@@ -415,6 +598,7 @@ class CodeManager {
         }
         code = this.lowerCode(code);
         code = this.sanitizeGreek(code);
+        code = this.manageAssignments(code);
         code = this.manageOperands(code);
 
         this.conditionManager.validateIfStatements(code);
@@ -502,14 +686,85 @@ class CodeManager {
         return stack.length === 0 && (!checkStrings || (!inSingle && !inDouble));
     }
 
+    manageAssignments(code) {
+        const lines = code.split('\n');
+        const result = [];
+        for (let i = 0; i < lines.length; i++) {
+            const rawLine = lines[i];
+            if (!rawLine.includes('<-')) {
+                result.push(rawLine);
+                continue;
+            }
+
+            const matches = rawLine.match(/<-/g) || [];
+            if (matches.length !== 1) {
+                throw new TranslationError({
+                    devMessage: `Line ${i + 1}: expected exactly one '<-' operator in assignment`,
+                    userMessage: 'Μη έγκυρη ανάθεση. Η γραμμή πρέπει να περιέχει μόνο έναν τελεστή "<-".',
+                    line: i + 1,
+                });
+            }
+
+            const lineMatch = rawLine.match(/^(\s*)(.*)$/);
+            const indent = lineMatch ? lineMatch[1] : '';
+            const code = lineMatch ? lineMatch[2] : rawLine;
+            const [rawLeft, rawRight] = code.split(/<-/);
+            const left = rawLeft.trim();
+            const expression = rawRight === undefined ? '' : rawRight.trim();
+
+            if (!left || !expression) {
+                throw new TranslationError({
+                    devMessage: `Line ${i + 1}: invalid assignment structure`,
+                    userMessage: 'Μη έγκυρη ανάθεση. Ελέγξτε τη μορφή της γραμμής.',
+                    line: i + 1,
+                });
+            }
+
+            const targetMatch = left.match(/^([\p{L}_][\p{L}\d_]*)(\s*\[\s*[^\]]+\s*\])?$/u);
+            if (!targetMatch) {
+                throw new TranslationError({
+                    devMessage: `Line ${i + 1}: invalid assignment target '${left}'`,
+                    userMessage: 'Μη έγκυρος στόχος ανάθεσης. Χρησιμοποιήστε μόνο μία μεταβλητή ή δείκτη πίνακα στη αριστερή πλευρά.',
+                    line: i + 1,
+                });
+            }
+
+            const variableName = targetMatch[1];
+            const variable = this.variables.find((v) => v.name === variableName);
+            if (!variable) {
+                throw new TranslationError({
+                    devMessage: `Line ${i + 1}: assignment target '${variableName}' is not declared`,
+                    userMessage: `Η μεταβλητή '${variableName}' δεν έχει δηλωθεί.`,
+                    line: i + 1,
+                });
+            }
+
+            if (targetMatch[2] && !variable.isArray) {
+                throw new TranslationError({
+                    devMessage: `Line ${i + 1}: assignment target '${left}' is not an array`,
+                    userMessage: `Η μεταβλητή '${variableName}' δεν είναι πίνακας, αλλά χρησιμοποιήθηκε δείκτης.`,
+                    line: i + 1,
+                });
+            }
+
+            if (!variable.type) {
+                throw new TranslationError({
+                    devMessage: `Line ${i + 1}: variable '${variableName}' has no declared type`,
+                    userMessage: `Η μεταβλητή '${variableName}' δεν έχει δηλωμένο τύπο για έλεγχο ανάθεσης.`,
+                    line: i + 1,
+                });
+            }
+
+            result.push(`${indent}${left} __ASSIGN__ safeAssignment('${variable.type}', ${expression})`);
+        }
+        return result.join('\n');
+    }
+
     manageOperands(code) {
         let result = code;
 
         // comparison "=" → "==" (do this first before assignment replacement)
         result = result.replace(/(?<![<>=!])=(?!=)/g, '==');
-
-        // assignment
-        result = result.replace(/<-/g, '=');
 
         // not equal
         result = result.replace(/<>/g, '!=');
@@ -524,6 +779,9 @@ class CodeManager {
 
         // mod
         result = result.replace(/\bmod\b/g, '%');
+
+        // restore protected assignment markers
+        result = result.replace(/__ASSIGN__/g, '=');
 
         return result;
     }
@@ -616,9 +874,15 @@ class CodeManager {
                     }
                 }
 
+                
+
                 // generate input lines
                 for (let v of variables) {
-                    result.push(`${indent}${v} = await input()`);
+                    const variable = this.variables.find(obj => obj.name === v) || (() => { throw new TranslationError({
+                        devMessage: `Line ${i + 1}: variable '${v}' is not declared`,
+                        userMessage: `Η μεταβλητή '${v}' δεν έχει δηλωθεί.`,
+                    }); })();
+                    result.push(`${indent}${v} = safeAssignment('${variable.type}', await input())`);
                 }
             } else {
                 result.push(rawLine);
@@ -633,7 +897,8 @@ module.exports = {
     LoopManager,
     ConditionManager,
     CodeManager,
-    TranslationError
+    TranslationError,
+    createFixArray
 };
 
 
@@ -642,8 +907,8 @@ let code = `ΠΡΟΓΡΑΜΜΑ Simple
 ΣΤΑΘΕΡΕΣ
     λεξη = "Γεια"
 ΜΕΤΑΒΛΗΤΕΣ
-  ΑΚΕΡΑΙΕΣ: x, y
-  ΧΑΡΑΚΤΗΡΕΣ: ονοματα[25]
+  ΑΚΕΡΑΙΕΣ: x[10], y
+  ΧΑΡΑΚΤΗΡΕΣ: ονοματα
 ΑΡΧΗ
 Διάβασε x
 Γράψε "Έδωσες την τιμή:", x
