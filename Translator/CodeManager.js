@@ -125,7 +125,7 @@ class CodeManager {
         if (parts.length !== 2) {
             throw new TranslationError({
                 devMessage: 'Invalid program start syntax',
-                userMessage: 'Λάθος μορφή επικεφαλίδας προγράμματος.',
+                userMessage: 'Λείπει το όνομα του προγράμματος μετά την λέξη ΠΡΟΓΡΑΜΜΑ.',
             });
         }
 
@@ -458,12 +458,10 @@ class CodeManager {
         // constants → const
         for (let c of constants) {
             if (c.value !== null && c.value !== undefined) {
-                const typeAnnotation = c.type ? `: ${c.type}` : '';
                 const value = c.type === 'string' ? JSON.stringify(c.value) : c.value;
-                decl.push(`const ${c.name}${typeAnnotation} = ${value}`);
+                decl.push(`const ${c.name} = ${value}`);
             } else {
-                const typeAnnotation = c.type ? `: ${c.type}` : '';
-                decl.push(`const ${c.name}${typeAnnotation}`);
+                decl.push(`const ${c.name}`);
             }
         }
 
@@ -476,12 +474,7 @@ class CodeManager {
                 if (v.isArray) {
                     arrayDecls.push(`let ${v.name} = createFixArray(${v.arraySize}, '${v.type}')`);
                 } else {
-                    if (v.type) {
-                        const tsType = (v.type === 'int' || v.type === 'float') ? 'number' : v.type;
-                        regularVars.push(`${v.name}: ${tsType}`);
-                    } else {
-                        regularVars.push(v.name);
-                    }
+                    regularVars.push(v.name);
                 }
             }
             
@@ -770,15 +763,18 @@ class CodeManager {
         result = result.replace(/<>/g, '!=');
 
         // logical operators
-        result = result.replace(/\bκαι\b/g, '&&');
-        result = result.replace(/\bή\b/g, '||');
-        result = result.replace(/\bοχι\b/g, '!');
-        result = result.replace(/\bαληθεσ\b/g, 'true');
-        result = result.replace(/\bψευδεσ\b/g, 'false');
-        result = result.replace(/\bψευδησ\b/g, 'false');
+        const wordBoundary = '(?<![\p{L}\p{N}_])';
+        const wordBoundaryEnd = '(?![\p{L}\p{N}_])';
+
+        result = result.replace(new RegExp(`${wordBoundary}και${wordBoundaryEnd}`, 'gu'), '&&');
+        result = result.replace(new RegExp(`${wordBoundary}ή${wordBoundaryEnd}`, 'gu'), '||');
+        result = result.replace(new RegExp(`${wordBoundary}οχι${wordBoundaryEnd}`, 'gu'), '!');
+        result = result.replace(new RegExp(`${wordBoundary}αληθεσ${wordBoundaryEnd}`, 'gu'), 'true');
+        result = result.replace(new RegExp(`${wordBoundary}ψευδεσ${wordBoundaryEnd}`, 'gu'), 'false');
+        result = result.replace(new RegExp(`${wordBoundary}ψευδησ${wordBoundaryEnd}`, 'gu'), 'false');
 
         // mod
-        result = result.replace(/\bmod\b/g, '%');
+        result = result.replace(new RegExp(`${wordBoundary}mod${wordBoundaryEnd}`, 'gu'), '%');
 
         // restore protected assignment markers
         result = result.replace(/__ASSIGN__/g, '=');
@@ -898,7 +894,8 @@ module.exports = {
     ConditionManager,
     CodeManager,
     TranslationError,
-    createFixArray
+    createFixArray,
+    safeAssignment
 };
 
 

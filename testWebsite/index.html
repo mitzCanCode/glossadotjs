@@ -4,6 +4,47 @@
         <link rel="stylesheet" type="text/css" href="./style.css" />
     </head>
     <body>
+
+        <div id="editor" style="height:300px; border:1px solid #0f0; margin-top:10px;"></div>
+
+        <script src="https://unpkg.com/monaco-editor@0.45.0/min/vs/loader.js"></script>
+        <script>
+        require.config({ paths: { vs: 'https://unpkg.com/monaco-editor@0.45.0/min/vs' }});
+
+        window.initMonaco = function(callback) {
+            require(['vs/editor/editor.main'], function () {
+            const editor = monaco.editor.create(document.getElementById('editor'), {
+                value: `προγραμμα kati
+μεταβλητεσ
+    ακεραιεσ: count,num
+αρχη
+count <- 1
+num <- 10
+Όσο count <= num επανάλαβε
+    Αν count MOD 3 = 0 Και count MOD 5 = 0 τότε
+        Γράψε count, ": Διαιρείται από 3 και 5"
+    αλλιώς_αν count MOD 3 = 0 τότε
+        Γράψε count, ": Διαιρείται από 3"
+    αλλιώς_αν count MOD 5 = 0 τότε
+        Γράψε count, ": Διαιρείται από 5"
+    αλλιώς
+        Γράψε count, ": Δεν διαιρείται από 3 ή 5"
+    Τέλος_αν
+    count <- count + 1
+Τέλος_επανάληψης
+τελοσ_προγραμματοσ`,
+                language: 'javascript',
+                theme: 'vs-dark',
+                fontSize: 14,
+                minimap: { enabled: true }
+            });
+
+            callback(editor);
+            });
+        };
+        </script>
+
+
         <div id="terminal">
             <div class="line input-line">
                 <span class="prompt">&gt;</span>
@@ -19,6 +60,7 @@
 
         </div>
 
+        <script src="./translator-loader.js"></script>
         <script src="./main.js"></script>
     </body>
 </html>

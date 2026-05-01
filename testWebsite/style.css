@@ -6,6 +6,10 @@ body {
     padding: 20px;
 }
 
+#editor {
+    background: #1e1e1e;
+}
+
 #terminal {
     height: 300px;
     overflow-y: auto;
@@ -45,4 +49,8 @@ button {
     border: none;
     padding: 5px 10px;
     cursor: pointer;
+}
+
+.line.yellow {
+    color: #ff0;
 }
