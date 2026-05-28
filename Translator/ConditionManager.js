@@ -13,8 +13,10 @@ class ConditionManager {
 
             const isIf = line.startsWith('αν ');
             const isElseIf = line.startsWith('αλλιωσ_αν ');
+            const isSwitch = line.startsWith('επιλεξε');
             const isElse = line === 'αλλιωσ';
             const isEndIf = line === 'τελοσ_αν';
+            const isEndSwitch = line === 'τελοσ_επιλογων';
 
             // must end with "τοτε"
             if (isIf || isElseIf) {
@@ -28,7 +30,7 @@ class ConditionManager {
                 }
             }
 
-            if (isIf) {
+            if (isIf || isSwitch) {
                 stack.push({ line: i + 1, hasElse: false });
             }
 
@@ -68,6 +70,17 @@ class ConditionManager {
                 }
                 stack.pop();
             }
+            else if (isEndSwitch) {
+                if (stack.length === 0) {
+                    throw new TranslationError({
+                        devMessage: `Line ${i + 1}: 'τελος_επιλογων' without matching 'επιλεξε'`,
+                        userMessage:
+                            "Βρέθηκε 'τέλος_επιλογών' χωρίς να έχει ανοίξει εντολή 'επιλέξε'.",
+                        line: i + 1,
+                    });
+                }
+                stack.pop();
+            }
         }
 
         if (stack.length > 0) {
@@ -86,6 +99,8 @@ class ConditionManager {
         const lines = code.split('\n');
         let result = [];
 
+        let insideSwitchCount = 0;
+        let insideCase = false;
         for (let rawLine of lines) {
             let line = rawLine.trim();
             if (!line) continue;
@@ -112,12 +127,46 @@ class ConditionManager {
 
             // αλλιως → } else {
             else if (line === 'αλλιωσ') {
-                result.push(`} else {`);
+                if (insideSwitchCount > 0) {
+                    // inside switch, else means "default"
+                    if (insideCase) {
+                        result.push(`break;`);
+                        insideCase = false;
+                    }
+                    result.push(`default:`);
+                } else {
+                    result.push(`} else {`);
+                }
             }
 
             // τελος_αν → }
             else if (line === 'τελοσ_αν') {
                 result.push(`}`);
+            }
+
+            else if (line.startsWith('επιλεξε')) {
+                let expression = line.replace('επιλεξε', '').trim();
+                result.push(`switch (${expression}) {`);
+                insideSwitchCount++;
+            }
+
+            else if (line.startsWith('περιπτωση ')) {
+                if (insideCase) {
+                    result.push(`break;`);
+                }
+                let caseValue = line.replace('περιπτωση', '').trim();
+                result.push(`case ${caseValue}:`);
+                insideCase = true;
+            }
+
+            // τελος_επιλογων → }
+            else if (line === 'τελοσ_επιλογων') {
+                if (insideCase) {
+                    result.push(`break;`);
+                    insideCase = false;
+                }
+                result.push(`}`);
+                insideSwitchCount--;
             }
 
             // normal line (inside blocks)
